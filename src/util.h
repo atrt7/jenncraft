@@ -5,12 +5,8 @@ int iabs(int i);
 
 int signum(int i);
 
-long fxMul(long a, long b);
+int min(int a, int b);
 
-long fxDiv(long a, long b);
-
-long intToFx(int i);
-
-int fxToInt(long l);
+int max(int a, int b);
 
 #endif

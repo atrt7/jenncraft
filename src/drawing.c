@@ -1,5 +1,6 @@
 #include "drawing.h"
 #include "util.h"
+#include "fixed.h"
 
 #include <fxcg/display.h>
 //#include <math.h>
@@ -8,6 +9,37 @@ color_t* vramadress;
 
 void initDrawing(void) {
 	vramadress = (color_t*)GetVRAMAddress();
+}
+
+void DmaWaitNext(void){
+	while(1){
+		if((*DMA0_DMAOR)&4)//Address error has occurred stop looping
+			break;
+		if((*DMA0_CHCR_0)&2)//Transfer is done
+			break;
+	}
+	SYNCO();
+	*DMA0_CHCR_0&=~1;
+	*DMA0_DMAOR=0;
+}
+void DoDMAlcdNonblockStrip(unsigned y1,unsigned y2){
+	Bdisp_WriteDDRegister3_bit7(1);
+	Bdisp_DefineDMARange(6,389,y1,y2);
+	Bdisp_DDRegisterSelect(LCD_GRAM);
+
+	*MSTPCR0&=~(1<<21);//Clear bit 21
+	*DMA0_CHCR_0&=~1;//Disable DMA on channel 0
+	*DMA0_DMAOR=0;//Disable all DMA
+	*DMA0_SAR_0=(VRAM_ADDR+(y1*384*2))&0x1FFFFFFF;//Source address is VRAM
+	*DMA0_DAR_0=LCD_BASE&0x1FFFFFFF;//Destination is LCD
+	*DMA0_TCR_0=((y2-y1+1)*384)/16;//Transfer count bytes/32
+	*DMA0_CHCR_0=0x00101400;
+	*DMA0_DMAOR|=1;//Enable DMA on all channels
+	*DMA0_DMAOR&=~6;//Clear flags
+	*DMA0_CHCR_0|=1;//Enable channel0 DMA
+}
+void DoDMAlcdNonblock(void){
+	DoDMAlcdNonblockStrip(0,215);
 }
 
 void swapCoordinates(coordinate *a, coordinate *b) {
@@ -81,7 +113,7 @@ void sortCoordsAscendingByY(triangle *tri) {
   }
 }
 
-void fillFlatSideTriangleInt(coordinate v1, coordinate v2, coordinate v3, color_t color) {
+void fillFlatSideTriangleInt(coordinate v1, coordinate v2, coordinate v3, color_t outlineColor, color_t fillColor) {
     coordinate vTmp1 = {v1.x, v1.y};
     coordinate vTmp2 = {v1.x, v1.y};
     
@@ -118,7 +150,40 @@ void fillFlatSideTriangleInt(coordinate v1, coordinate v2, coordinate v3, color_
     int e2 = 2 * dy2 - dx2;
         
     for (int i = 0; i <= dx1; i++) {
-        drawLine(vTmp1.x, vTmp1.y, vTmp2.x, vTmp2.y, 0x0021);
+        
+        /*if (vTmp1.x == vTmp2.x) {
+            for (int y = min(vTmp1.y, vTmp2.y); y <= max(vTmp1.y, vTmp2.y); ++y) {
+                *(vramadress + (LCD_WIDTH_PX * y) + vTmp1.x) = color;
+            }
+        } else if (vTmp1.y == vTmp2.y) {
+            for (int x = min(vTmp1.x, vTmp2.x); x <= max(vTmp1.x, vTmp2.x); ++x) {
+                *(vramadress + (LCD_WIDTH_PX * vTmp1.y) + x) = color;
+            }
+        }*/
+        
+        /*if (vTmp1.x == vTmp2.x) {
+            for (int y = min(vTmp1.y, vTmp2.y); y <= max(vTmp1.y, vTmp2.y); ++y) {
+                putPixel(vTmp1.x, y, color);
+            }
+        } else if (vTmp1.y == vTmp2.y) {
+            for (int x = min(vTmp1.x, vTmp2.x); x <= max(vTmp1.x, vTmp2.x); ++x) {
+                putPixel(x, vTmp1.y, color);
+            }
+        }*/
+        
+        if (vTmp1.x == vTmp2.x) {
+            int y1 = min(vTmp1.y, vTmp2.y);
+            int y2 = max(vTmp1.y, vTmp2.y);
+            for (int y = y1; y <= y2; ++y) {
+                putPixel(vTmp1.x, y, (y == y1 || y == y2) ? outlineColor : fillColor);
+            }
+        } else if (vTmp1.y == vTmp2.y) {
+            int x1 = min(vTmp1.x, vTmp2.x);
+            int x2 = max(vTmp1.x, vTmp2.x);
+            for (int x = x1; x <= x2; ++x) {
+                putPixel(x, vTmp1.y, (x == x1 || x == x2) ? outlineColor : fillColor);
+            }
+        }
         
         while (e1 >= 0) {
             if (changed1)
@@ -157,18 +222,18 @@ void fillFlatSideTriangleInt(coordinate v1, coordinate v2, coordinate v3, color_
     }
 }
 
-void rasterize(triangle tri, color_t color) {
+void rasterize(triangle tri, color_t outlineColor, color_t fillColor) {
   sortCoordsAscendingByY(&tri);
 
   if (tri.two.y == tri.three.y) {
-    fillFlatSideTriangleInt(tri.one, tri.two, tri.three, color);
+    fillFlatSideTriangleInt(tri.one, tri.two, tri.three, outlineColor, fillColor);
   } else if (tri.one.y == tri.two.y) {
-    fillFlatSideTriangleInt(tri.three, tri.one, tri.two, color);
+    fillFlatSideTriangleInt(tri.three, tri.one, tri.two, outlineColor, fillColor);
   } else {
     coordinate tmp;
-    tmp.x = fxToInt(intToFx(tri.one.x) + fxMul(fxDiv(intToFx(tri.two.y - tri.one.y), intToFx(tri.three.y - tri.one.y)), intToFx(tri.three.x - tri.one.x)));
+    tmp.x = fixtoi(itofix(tri.one.x) + fmul(fdiv(itofix(tri.two.y - tri.one.y), itofix(tri.three.y - tri.one.y)), itofix(tri.three.x - tri.one.x)));
     tmp.y = tri.two.y;
-    fillFlatSideTriangleInt(tri.one, tri.two, tmp, color);
-    fillFlatSideTriangleInt(tri.three, tri.two, tmp, color);
+    fillFlatSideTriangleInt(tri.one, tri.two, tmp, outlineColor, fillColor);
+    fillFlatSideTriangleInt(tri.three, tri.two, tmp, outlineColor, fillColor);
   }
 }

@@ -1,15 +1,22 @@
 #include "input.h"
 #include "drawing.h"
+#include "util.h"
 
 #include <fxcg/display.h>
 #include <fxcg/keyboard.h>
 #include <fxcg/rtc.h>
+#include <fxcg/misc.h>
+#include <string.h>
 
 int main(void) {
     int key;
+    int frames = 0;
     //int x1 = 50, y1 = 50, x2 = 0, y2 = 0;
-    //int previousTicks = RTC_GetTicks();
-	//float deltaTime;
+    int previousTicks = RTC_GetTicks();
+    int frameTicks = previousTicks;
+	float deltaTime;
+    unsigned char out[11];
+    //sys_strcpy((char *) out, "  FPS:  ");
     triangle tri = {
         {20, 20},
         {100, 20},
@@ -17,31 +24,34 @@ int main(void) {
     };
     initDrawing();
     Bdisp_EnableColor(1);
+    DrawFrame(0x0021);
     
     while(1) {
         keyupdate();
         if(keydownlast(KEY_PRGM_MENU)) {
             GetKey(&key);
         } else {
+            
             //add code for updating
-            /*int ticks = RTC_GetTicks();
+            int ticks = RTC_GetTicks();
 			deltaTime = ticks-previousTicks;
 			previousTicks = ticks;
 			deltaTime /= 128.f;
 			if(deltaTime > 0.1f) deltaTime = 0.1f;
+            frames++;
             
             float ySpeed = (keydownlast(KEY_PRGM_DOWN)-keydownlast(KEY_PRGM_UP)) *144*deltaTime;
-			float xSpeed = (keydownlast(KEY_PRGM_RIGHT)-keydownlast(KEY_PRGM_LEFT)) *144*deltaTime;*/
+			float xSpeed = (keydownlast(KEY_PRGM_RIGHT)-keydownlast(KEY_PRGM_LEFT)) *144*deltaTime;
             
             if(keydownlast(KEY_PRGM_1)) {
-                tri.one.x += 1;
-                tri.one.y += 1;
+                tri.one.x += xSpeed;
+                tri.one.y += ySpeed;
             } else if(keydownlast(KEY_PRGM_2)) {
-                tri.two.x += 1;
-                tri.two.y += 1;
+                tri.two.x += xSpeed;
+                tri.two.y += ySpeed;
             } else if(keydownlast(KEY_PRGM_3)) {
-                tri.three.x += 1;
-                tri.three.y += 1;
+                tri.three.x += xSpeed;
+                tri.three.y += ySpeed;
             }
             
             /*if(keydownlast(KEY_PRGM_1)) {
@@ -57,7 +67,6 @@ int main(void) {
             //y2 += ySpeed;
             
             Bdisp_AllClr_VRAM();
-            
             //add drawing code
             
             
@@ -65,10 +74,27 @@ int main(void) {
             drawLine(tri.two.x, tri.two.y, tri.three.x, tri.three.y, 0x0021);
             drawLine(tri.three.x, tri.three.y, tri.one.x, tri.one.y, 0x0021);*/
             
-            rasterize(tri, COLOR_GREENYELLOW);
-            
-            DrawFrame(0x0021);
-			Bdisp_PutDisp_DD();
+            for(int i = 0; i <= 16; i++) {
+                triangle tri2 = tri;
+                tri2.one.x += i * 8;
+                tri2.one.y += i * 8;
+                tri2.two.x += i * 8;
+                tri2.two.y += i * 8;
+                tri2.three.x += i * 8;
+                tri2.three.y += i *8;
+                rasterize(tri2, 0x0021, COLOR_HOTPINK);
+            }
+            if((ticks - frameTicks) / 128 >= 1) {
+                unsigned char num[3];
+                itoa(frames, num);
+                sys_strcpy((char *) out, "  FPS:");
+                sys_strcat((char *) out, (char *) num);
+                frames = 0;
+                frameTicks += 128;
+            }
+            PrintXY(3, 8, (char *) out, TEXT_MODE_NORMAL, TEXT_COLOR_BLACK);
+            DoDMAlcdNonblock();
+            DmaWaitNext();
         }
     }
 } 
