@@ -7,6 +7,7 @@
 #include <fxcg/rtc.h>
 #include <fxcg/misc.h>
 #include <string.h>
+#include <stdio.h>
 
 int main(void) {
     int key;
@@ -74,21 +75,17 @@ int main(void) {
             drawLine(tri.two.x, tri.two.y, tri.three.x, tri.three.y, 0x0021);
             drawLine(tri.three.x, tri.three.y, tri.one.x, tri.one.y, 0x0021);*/
             
-            for(int i = 0; i <= 16; i++) {
-                triangle tri2 = tri;
-                tri2.one.x += i * 8;
-                tri2.one.y += i * 8;
-                tri2.two.x += i * 8;
-                tri2.two.y += i * 8;
-                tri2.three.x += i * 8;
-                tri2.three.y += i *8;
-                rasterize(tri2, 0x0021, COLOR_HOTPINK);
-            }
+            /*for(int i = 0; i <= 16; i++) {
+                rasterize((triangle) {.one.x = i * 8 + tri.one.x, .one.y = i * 8 + tri.one.y, .two.x = i * 8 + tri.two.x, .two.y = i * 8 + tri.two.y, .three.x = i * 8 + tri.three.x, .three.y = i * 8 + tri.three.y}, 0x0021, COLOR_HOTPINK);
+            }*/
+            
+            rasterize(tri, 0x0021, COLOR_HOTPINK);
+            
             if((ticks - frameTicks) / 128 >= 1) {
                 unsigned char num[3];
                 itoa(frames, num);
-                sys_strcpy((char *) out, "  FPS:");
-                sys_strcat((char *) out, (char *) num);
+                strcpy((char *) out, "  FPS:");
+                strcat((char *) out, (char *) num);
                 frames = 0;
                 frameTicks += 128;
             }

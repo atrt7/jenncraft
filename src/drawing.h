@@ -7,12 +7,16 @@
 
 typedef struct {
     int x, y;
-}coordinate;
+}Vec2;
 
 typedef struct {
-    coordinate one;
-    coordinate two;
-    coordinate three;
+    int x, y, z;
+}Vec3;
+
+typedef struct {
+    Vec2 one;
+    Vec2 two;
+    Vec2 three;
 }triangle;
 
 #define LCD_GRAM	0x202
@@ -38,7 +42,9 @@ void DoDMAlcdNonblockStrip(unsigned y1,unsigned y2);
 
 void DoDMAlcdNonblock(void);
 
-void swapCoordinates(coordinate *a, coordinate *b);
+void swapVec2(Vec2 *a, Vec2 *b);
+
+int isVec2OutsideOfScreen(Vec2 v);
 
 void putPixel(int x, int y, color_t color);
 
@@ -48,8 +54,12 @@ void drawLine(int x1, int y1, int x2, int y2, color_t color);
 
 void sortCoordsAscendingByY(triangle *tri);
 
-void fillFlatSideTriangleInt(coordinate v1, coordinate v2, coordinate v3, color_t outlineColor, color_t fillColor);
+void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, color_t fillColor);
 
 void rasterize(triangle tri, color_t outlineColor, color_t fillColor);
+
+Vec2 viewportToCanvas(int x, int y, int viewportWidth, int viewportHeight);
+
+Vec2 projectVertex(Vec3 v, int d);
 
 #endif
