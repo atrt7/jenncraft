@@ -30,7 +30,7 @@ void DoDMAlcdNonblockStrip(unsigned y1,unsigned y2){
 	*MSTPCR0&=~(1<<21);//Clear bit 21
 	*DMA0_CHCR_0&=~1;//Disable DMA on channel 0
 	*DMA0_DMAOR=0;//Disable all DMA
-	*DMA0_SAR_0=(VRAM_ADDR+(y1*384*2))&0x1FFFFFFF;//Source address is VRAM
+	*DMA0_SAR_0=((unsigned int)vramadress+(y1*384*2))&0x1FFFFFFF;//Source address is VRAM
 	*DMA0_DAR_0=LCD_BASE&0x1FFFFFFF;//Destination is LCD
 	*DMA0_TCR_0=((y2-y1+1)*384)/16;//Transfer count bytes/32
 	*DMA0_CHCR_0=0x00101400;
