@@ -281,18 +281,18 @@ void rasterize(triangle tri, color_t outlineColor, color_t fillColor) {
 
         if (tri.two.y == tri.three.y) {
             fillFlatSideTriangleInt(tri.one, tri.two, tri.three, fillColor);
-            drawWireFrameTriangle(tri, outlineColor);
+            //drawWireFrameTriangle(tri, outlineColor);
         } else if (tri.one.y == tri.two.y) {
             fillFlatSideTriangleInt(tri.three, tri.one, tri.two, fillColor);
-            drawWireFrameTriangle(tri, outlineColor);
+            //drawWireFrameTriangle(tri, outlineColor);
         } else {
             vec2 tmp;
             tmp.x = fixtoi(itofix(tri.one.x) + fmul(fdiv(itofix(tri.two.y - tri.one.y), itofix(tri.three.y - tri.one.y)), itofix(tri.three.x - tri.one.x)));
             tmp.y = tri.two.y;
             fillFlatSideTriangleInt(tri.one, tri.two, tmp, fillColor);
             fillFlatSideTriangleInt(tri.three, tri.two, tmp, fillColor);
-            drawWireFrameTriangle(tri, outlineColor);
-            drawLine(tri.two.x, tri.two.y, tmp.x, tmp.y, outlineColor);
+            //drawWireFrameTriangle(tri, outlineColor);
+            //drawLine(tri.two.x, tri.two.y, tmp.x, tmp.y, outlineColor);
         }
     }
 }

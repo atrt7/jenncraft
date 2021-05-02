@@ -16,6 +16,9 @@ int main(void) {
     int previousTicks = RTC_GetTicks();
     int frameTicks = previousTicks;
 	float deltaTime;
+    fix ySpeed = ftofix(0.0f);
+    fix xSpeed = ftofix(0.0f);
+    fix zSpeed = ftofix(0.0f);
     unsigned char out[11];
     //sys_strcpy((char *) out, "  FPS:  ");
     
@@ -23,7 +26,7 @@ int main(void) {
             {ftofix(0.0f), ftofix(0.0f), ftofix(5.0f)}
     };
     
-    int modelNumTris = 12;
+    /*int modelNumTris = 12;
     triangleVec3 modelTris[] = {
             {
                     { ftofix(-1.0f), ftofix(1.0f), ftofix(-1.0f) },
@@ -85,7 +88,9 @@ int main(void) {
                     { ftofix(1.0f), ftofix(1.0f), ftofix(-1.0f) },
                     { ftofix(1.0f), ftofix(-1.0f), ftofix(-1.0f) }
             }
-    };
+    };*/
+    
+    #include "model.h"
     
     initDrawing();
     Bdisp_EnableColor(1);
@@ -108,16 +113,31 @@ int main(void) {
             //fix ySpeed = ftofix((keydownlast(KEY_PRGM_DOWN)-keydownlast(KEY_PRGM_UP)) *144*deltaTime);
 			//fix xSpeed = ftofix((keydownlast(KEY_PRGM_RIGHT)-keydownlast(KEY_PRGM_LEFT)) *144*deltaTime);
             
-            fix ySpeed = ftofix(0.1f);
-            fix xSpeed = ftofix(0.1f);
-            fix zSpeed = ftofix(0.1f);
+            if(keydownlast(KEY_PRGM_DOWN)) {
+                ySpeed = ftofix(-0.1f);
+            }
+            if(keydownlast(KEY_PRGM_UP)) {
+                ySpeed = ftofix(0.1f);
+            }
+            if(keydownlast(KEY_PRGM_RIGHT)) {
+                xSpeed = ftofix(0.1f);
+            }
+            if(keydownlast(KEY_PRGM_LEFT)) {
+                xSpeed = ftofix(-0.1f);
+            }
+            if(keydownlast(KEY_PRGM_SHIFT)) {
+                zSpeed = ftofix(0.1f);
+            }
+            if(keydownlast(KEY_PRGM_ALPHA)) {
+                zSpeed = ftofix(-0.1f);
+            }
             
             if(keydownlast(KEY_PRGM_1)) {
                 cam.pos.x += xSpeed;
             } else if(keydownlast(KEY_PRGM_2)) {
                 cam.pos.y += ySpeed;
             } else if(keydownlast(KEY_PRGM_3)) {
-                cam.pos.z += xSpeed;
+                cam.pos.z += zSpeed;
             }
             
             /*if(keydownlast(KEY_PRGM_1)) {
@@ -145,7 +165,7 @@ int main(void) {
             }*/
             
             for(int i = 0; i < modelNumTris; i++) {
-            drawWireframeTriangleVec3(modelTris[i], 0, cam);
+            rasterizeTriangleVec3(modelTris[i], 0x0021, COLOR_HOTPINK, cam);
             }
             
             //rasterizeCube();
