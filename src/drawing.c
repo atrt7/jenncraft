@@ -7,8 +7,26 @@
 
 color_t* vramadress;
 
+static fix viewportSize;
+static fix projPlaneZ;
+
+static fix cwFix;
+static fix chFix;
+
+static fix halfCwFix;
+static fix halfChFix;
+
 void initDrawing(void) {
 	vramadress = (color_t*)GetVRAMAddress();
+    
+    viewportSize = ftofix(1.0f);
+    projPlaneZ = ftofix(1.0f);
+
+    cwFix = ftofix((float)LCD_WIDTH_PX);
+    chFix = ftofix((float)LCD_HEIGHT_PX);
+
+    halfCwFix = ftofix(HALF_LCD_WIDTH);
+    halfChFix = ftofix(HALF_LCD_HEIGHT);
 }
 
 void DmaWaitNext(void){
@@ -42,14 +60,12 @@ void DoDMAlcdNonblock(void){
 	DoDMAlcdNonblockStrip(0,215);
 }
 
-void swapVec2(Vec2 *a, Vec2 *b) {
-    Vec2 temp = *a;
-    *a = *b;
-    *b = temp;
+int isVec2OutsideOfScreen(vec2 v) {
+    return (v.x < 0 || v.x > LCD_WIDTH_PX || v.y < 0 || v.y > LCD_HEIGHT_PX);
 }
 
-int isVec2OutsideOfScreen(Vec2 v) {
-  return (v.x <= 0 || v.x > LCD_WIDTH_PX || v.y <= 0 || v.y > LCD_HEIGHT_PX);
+int isTriangleOutsideOfScreen(triangle tri) {
+    return (isVec2OutsideOfScreen(tri.one) && isVec2OutsideOfScreen(tri.two) && isVec2OutsideOfScreen(tri.three));
 }
 
 void putPixel(int x, int y, color_t color) {
@@ -59,14 +75,14 @@ void putPixel(int x, int y, color_t color) {
 }
 
 void drawLine(int x1, int y1, int x2, int y2, color_t color) {
-    
+
     signed char ix;
     signed char iy;
- 
+
     int delta_x = (x2 > x1?(ix = 1, x2 - x1):(ix = -1, x1 - x2)) << 1;
     int delta_y = (y2 > y1?(iy = 1, y2 - y1):(iy = -1, y1 - y2)) << 1;
- 
-   putPixel(x1, y1, color);
+
+    putPixel(x1, y1, color);
     if (delta_x >= delta_y) {
         int error = delta_y - (delta_x >> 1);
         while (x1 != x2) {
@@ -75,7 +91,7 @@ void drawLine(int x1, int y1, int x2, int y2, color_t color) {
                     y1 += iy;
                     error -= delta_x;
                 }
-         }
+            }
             x1 += ix;
             error += delta_y;
             putPixel(x1, y1, color);
@@ -90,10 +106,21 @@ void drawLine(int x1, int y1, int x2, int y2, color_t color) {
                 }
             }
             y1 += iy;
-            error += delta_x;  
+            error += delta_x;
             putPixel(x1, y1, color);
         }
     }
+}
+
+vec2 projectVec3(vec3 vtx, camera cam) {
+    vtx.x -= cam.pos.x;
+    vtx.y -= cam.pos.y;
+    vtx.z -= cam.pos.z;
+
+    return (vec2) {
+            HALF_LCD_WIDTH + fixtoi(fdiv(fmul(fdiv(fmul(vtx.x, projPlaneZ), vtx.z), halfChFix), viewportSize)),
+            HALF_LCD_HEIGHT - fixtoi(fdiv(fmul(fdiv(fmul(vtx.y, projPlaneZ), vtx.z), halfChFix), viewportSize))
+    };
 }
 
 void drawWireFrameTriangle(triangle tri, color_t color) {
@@ -102,66 +129,72 @@ void drawWireFrameTriangle(triangle tri, color_t color) {
     drawLine(tri.three.x, tri.three.y, tri.one.x, tri.one.y, color);
 }
 
-void sortCoordsAscendingByY(triangle *tri) {
-  Vec2 tmp;
-
-  if (tri->one.y > tri->two.y) {
-    tmp = tri->one;
-    tri->one = tri->two;
-    tri->two = tmp;
-  }
-
-  if (tri->one.y > tri->three.y) {
-    tmp = tri->one;
-    tri->one = tri->three;
-    tri->three = tmp;
-  }
-
-  if (tri->two.y > tri->three.y) {
-    tmp = tri->two;
-    tri->two = tri->three;
-    tri->three = tmp;
-  }
+void drawWireframeTriangleVec3(triangleVec3 tri, color_t outlineColor, camera cam) {
+    //if(fixtoi(tri.one.z) > 0 && fixtoi(tri.two.z) > 0 && fixtoi(tri.three.z) > 0) {
+        drawWireFrameTriangle((triangle) { projectVec3(tri.one, cam), projectVec3(tri.two, cam), projectVec3(tri.three, cam) }, outlineColor);
+    //}
 }
 
-void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, color_t fillColor) {
-    Vec2 vTmp1 = {v1.x, v1.y};
-    Vec2 vTmp2 = {v1.x, v1.y};
-    
+void triangleSortCoordsAscendingByY(triangle *tri) {
+    vec2 tmp;
+
+    if (tri->one.y > tri->two.y) {
+        tmp = tri->one;
+        tri->one = tri->two;
+        tri->two = tmp;
+    }
+
+    if (tri->one.y > tri->three.y) {
+        tmp = tri->one;
+        tri->one = tri->three;
+        tri->three = tmp;
+    }
+
+    if (tri->two.y > tri->three.y) {
+        tmp = tri->two;
+        tri->two = tri->three;
+        tri->three = tmp;
+    }
+}
+
+void fillFlatSideTriangleInt(vec2 v1, vec2 v2, vec2 v3, color_t fillColor) {
+    vec2 vTmp1 = {v1.x, v1.y};
+    vec2 vTmp2 = {v1.x, v1.y};
+
     int changed1 = 0;
     int changed2 = 0;
-    
+
     int dx1 = iabs(v2.x - v1.x);
     int dy1 = iabs(v2.y - v1.y);
-        
+
     int dx2 = iabs(v3.x - v1.x);
     int dy2 = iabs(v3.y - v1.y);
-        
+
     int signx1 = signum(v2.x - v1.x);
     int signx2 = signum(v3.x - v1.x);
-        
+
     int signy1 = signum(v2.y - v1.y);
     int signy2 = signum(v3.y - v1.y);
-    
+
     if (dy1 > dx1) {
         int tmp = dx1;
         dx1 = dy1;
         dy1 = tmp;
         changed1 = 1;
     }
-        
+
     if (dy2 > dx2) {
         int tmp = dx2;
         dx2 = dy2;
         dy2 = tmp;
         changed2 = 1;
     }
-        
+
     int e1 = 2 * dy1 - dx1;
     int e2 = 2 * dy2 - dx2;
-        
+
     for (int i = 0; i <= dx1; i++) {
-        
+
         /*if (vTmp1.x == vTmp2.x) {
             for (int y = min(vTmp1.y, vTmp2.y); y <= max(vTmp1.y, vTmp2.y); ++y) {
                 *(vramadress + (LCD_WIDTH_PX * y) + vTmp1.x) = color;
@@ -171,17 +204,7 @@ void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, co
                 *(vramadress + (LCD_WIDTH_PX * vTmp1.y) + x) = color;
             }
         }*/
-        
-        /*if (vTmp1.x == vTmp2.x) {
-            for (int y = min(vTmp1.y, vTmp2.y); y <= max(vTmp1.y, vTmp2.y); ++y) {
-                putPixel(vTmp1.x, y, fillColor);
-            }
-        } else if (vTmp1.y == vTmp2.y) {
-            for (int x = min(vTmp1.x, vTmp2.x); x <= max(vTmp1.x, vTmp2.x); ++x) {
-                putPixel(x, vTmp1.y, fillColor);
-            }
-        }*/
-        
+
         if (vTmp1.x == vTmp2.x) {
             int yMax = max(vTmp1.y, vTmp2.y);
             int yMin = min(vTmp1.y, vTmp2.y);
@@ -195,7 +218,7 @@ void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, co
                 putPixel(x, vTmp1.y, fillColor);
             }
         }
-        
+
         /*if (vTmp1.x == vTmp2.x) {
             int y1 = min(vTmp1.y, vTmp2.y);
             int y2 = max(vTmp1.y, vTmp2.y);
@@ -209,9 +232,9 @@ void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, co
                 putPixel(x, vTmp1.y, (x == x1 || x == x2) ? outlineColor : fillColor);
             }
         }*/
-        
+
         //drawLine(vTmp1.x, vTmp1.y, vTmp2.x, vTmp2.y, fillColor);
-        
+
         while (e1 >= 0) {
             if (changed1)
                 vTmp1.x += signx1;
@@ -219,14 +242,14 @@ void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, co
                 vTmp1.y += signy1;
             e1 = e1 - 2 * dx1;
         }
-        
+
         if (changed1)
             vTmp1.y += signy1;
         else
-            vTmp1.x += signx1;  
-        
+            vTmp1.x += signx1;
+
         e1 = e1 + 2 * dy1;
-        
+
         /* here we rendered the next point on line 1 so follow now line 2
             * until we are on the same y-value as line 1.
             */
@@ -253,30 +276,31 @@ void fillFlatSideTriangleInt(Vec2 v1, Vec2 v2, Vec2 v3, color_t outlineColor, co
 }
 
 void rasterize(triangle tri, color_t outlineColor, color_t fillColor) {
-  sortCoordsAscendingByY(&tri);
+    if(!isTriangleOutsideOfScreen(tri)) {
+        triangleSortCoordsAscendingByY(&tri);
 
-  if (tri.two.y == tri.three.y) {
-    fillFlatSideTriangleInt(tri.one, tri.two, tri.three, outlineColor, fillColor);
-    drawWireFrameTriangle(tri, outlineColor);
-  } else if (tri.one.y == tri.two.y) {
-    fillFlatSideTriangleInt(tri.three, tri.one, tri.two, outlineColor, fillColor);
-    drawWireFrameTriangle(tri, outlineColor);
-  } else {
-    Vec2 tmp;
-    tmp.x = fixtoi(itofix(tri.one.x) + fmul(fdiv(itofix(tri.two.y - tri.one.y), itofix(tri.three.y - tri.one.y)), itofix(tri.three.x - tri.one.x)));
-    tmp.y = tri.two.y;
-    fillFlatSideTriangleInt(tri.one, tri.two, tmp, outlineColor, fillColor);
-    fillFlatSideTriangleInt(tri.three, tri.two, tmp, outlineColor, fillColor);
-    drawWireFrameTriangle(tri, outlineColor);
-    drawLine(tri.two.x, tri.two.y, tmp.x, tmp.y, outlineColor);
-  }
+        if (tri.two.y == tri.three.y) {
+            fillFlatSideTriangleInt(tri.one, tri.two, tri.three, fillColor);
+            drawWireFrameTriangle(tri, outlineColor);
+        } else if (tri.one.y == tri.two.y) {
+            fillFlatSideTriangleInt(tri.three, tri.one, tri.two, fillColor);
+            drawWireFrameTriangle(tri, outlineColor);
+        } else {
+            vec2 tmp;
+            tmp.x = fixtoi(itofix(tri.one.x) + fmul(fdiv(itofix(tri.two.y - tri.one.y), itofix(tri.three.y - tri.one.y)), itofix(tri.three.x - tri.one.x)));
+            tmp.y = tri.two.y;
+            fillFlatSideTriangleInt(tri.one, tri.two, tmp, fillColor);
+            fillFlatSideTriangleInt(tri.three, tri.two, tmp, fillColor);
+            drawWireFrameTriangle(tri, outlineColor);
+            drawLine(tri.two.x, tri.two.y, tmp.x, tmp.y, outlineColor);
+        }
+    }
 }
 
-Vec2 viewportToCanvas(int x, int y, int viewportWidth, int viewportHeight) {
-    return (Vec2) {.x = x * LCD_WIDTH_PX/viewportWidth, .y =  y * LCD_HEIGHT_PX/viewportHeight};
+void rasterizeTriangleVec3(triangleVec3 tri, color_t outlineColor, color_t fillColor, camera cam) {
+    //if(tri.one.z > 0 && tri.two.z > 0 && tri.three.z > 0) {
+        rasterize((triangle) { projectVec3(tri.one, cam), projectVec3(tri.two, cam), projectVec3(tri.three, cam) }, outlineColor, fillColor);
+    //}
 }
 
-Vec2 projectVertex(Vec3 v, int d) {
-    return viewportToCanvas(v.x * d / v.z, v.y * d / v.z, 100, 100);
-}
 
